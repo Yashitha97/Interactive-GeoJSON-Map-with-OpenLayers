@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoJSON Map</title>
+
+  <!-- OpenLayers CSS and JS -->
+  <link rel="stylesheet" href="https://openlayers.org/en/v4.6.5/css/ol.css" type="text/css">
+  <script src="https://openlayers.org/en/v4.6.5/build/ol.js"></script>
+</head>
+
+<body>
+
+  <div id="map" style="height: 610px;"></div>
+
+  <script>
+    // Initialize OpenLayers map
+    var map = new ol.Map({
+      target: 'map',
+      layers: [
+        // Base layer using OpenStreetMap
+        new ol.layer.Tile({
+          source: new ol.source.OSM()
+        })
+      ],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([81, 7.5]),
+        projection: ol.proj.get('EPSG:3857'),
+        zoom: 6
+      })
+    });
+
+    // Initial Vector layer with GeoJSON source
+    var initialVectorUrl = 'http://192.168.10.14:8000/api/users/pd/';
+    addVectorLayer(initialVectorUrl, function (initialVectorLayer) {
+      setupHighlightInteraction(initialVectorLayer);
+      handleMapClick(initialVectorLayer);
+    });
+
+    // Function to add a Vector layer with a GeoJSON source
+    function addVectorLayer(url, callback) {
+      var vectorLayer = new ol.layer.Vector({
+        source: new ol.source.Vector({
+          format: new ol.format.GeoJSON(),
+          url: url
+        })
+      });
+
+      map.addLayer(vectorLayer);
+
+      vectorLayer.getSource().once('change', function (event) {
+        if (vectorLayer.getSource().getState() === 'ready') {
+          map.getView().fit(vectorLayer.getSource().getExtent(), { padding: [10, 10, 10, 10], duration: 1000 });
+          callback(vectorLayer);
+        }
+      });
+    }
+
+    // Function to handle highlighting features on hover
+    function setupHighlightInteraction(vectorLayer) {
+      var selectInteraction = new ol.interaction.Select({
+        layers: [vectorLayer],
+        style: new ol.style.Style({
+          fill: new ol.style.Fill({
+            color: 'rgba(255, 0, 219, 0.1)' // Highlight fill color
+          }),
+          stroke: new ol.style.Stroke({
+            color: '#ff00db', // Highlight border color
+            width: 2
+          }),
+          image: new ol.style.Circle({
+            radius: 7,
+            fill: new ol.style.Fill({
+              color: '#ffcc33'
+            })
+          })
+        }),
+        hitTolerance: 5 // Adjust the hit tolerance to your preference
+      });
+
+      map.addInteraction(selectInteraction);
+
+      map.on('pointermove', function (event) {
+        var features = map.getFeaturesAtPixel(event.pixel);
+        if (features && features.length > 0) {
+          selectInteraction.getFeatures().clear();
+          selectInteraction.getFeatures().push(features[0]);
+        } else {
+          selectInteraction.getFeatures().clear();
+        }
+      });
+    }
+
+    // Function to handle click events and get feature properties
+    function handleMapClick(vectorLayer) {
+      // Define the click event handler function
+      function clickEventHandler(event) {
+        var feature = map.forEachFeatureAtPixel(event.pixel, function (feature) {
+          return feature;
+        });
+
+        if (feature) {
+          var properties = feature.getProperties();
+          var pdValue = properties['pd'];
+
+
+          var apiUrl = 'http://192.168.10.14:8000/api/users/disd/sql/?pd=' + encodeURIComponent(pdValue);
+
+          // Add a Vector layer with a GeoJSON source for the next level
+          addVectorLayer(apiUrl, function (newVectorLayer) {
+            vectorLayer.setVisible(false);
+
+            // Remove the current vectorLayer from the map
+            map.removeLayer(vectorLayer);
+
+            newVectorLayer.setVisible(true);
+
+            map.getView().fit(newVectorLayer.getSource().getExtent(), { padding: [10, 10, 10, 10], duration: 1000 });
+
+            // Remove the click event listener for the current vectorLayer
+            map.un('click', clickEventHandler);
+
+            // Event listener for click to get feature properties in the next level
+            handledisdMapClick(newVectorLayer);
+          });
+        }
+      }
+
+      // Add the click event listener to the map
+      map.on('click', clickEventHandler);
+    }
+
+    // Function to handle click events and get feature properties
+    function handledisdMapClick(newVectorLayer) {
+      // Define the click event handler function
+      function clickEventHandler(event) {
+        var feature = map.forEachFeatureAtPixel(event.pixel, function (feature) {
+          return feature;
+        });
+
+        if (feature) {
+          var properties = feature.getProperties();
+          var disdValue = properties['disd'];
+
+          var apiUrl = 'http://192.168.10.14:8000/api/users/dsd/sql/?disd=' + encodeURIComponent(disdValue);
+
+          // Add a Vector layer with a GeoJSON source for the next level
+          addVectorLayer(apiUrl, function (dsdVectorLayer) {
+            newVectorLayer.setVisible(false);
+            map.removeLayer(newVectorLayer);
+            dsdVectorLayer.setVisible(true);
+
+            map.getView().fit(dsdVectorLayer.getSource().getExtent(), { padding: [10, 10, 10, 10], duration: 1000 });
+
+            // Remove the click event listener for the current vectorLayer
+            map.un('click', clickEventHandler);
+
+            // Event listener for click to get feature properties in the next level
+            handleDsdMapClick(dsdVectorLayer);
+          });
+        }
+      }
+
+      // Add the click event listener to the map
+      map.on('click', clickEventHandler);
+    }
+
+    // Function to handle click events and get feature properties for 'dsd'
+    function handleDsdMapClick(dsdVectorLayer) {
+      // Define the click event handler function
+      function clickEventHandler(event) {
+        var feature = map.forEachFeatureAtPixel(event.pixel, function (feature) {
+          return feature;
+        });
+
+        if (feature) {
+          var properties = feature.getProperties();
+          var dsdValue = properties['dsd'];
+
+          var apiUrl = 'http://192.168.10.14:8000/api/users/gnd/sql/?dsd=' + encodeURIComponent(dsdValue);
+
+          // Add a Vector layer with a GeoJSON source for the next level
+          addVectorLayer(apiUrl, function (gndVectorLayer) {
+
+            dsdVectorLayer.setVisible(false);
+
+            // Remove the current vectorLayer from the map
+            map.removeLayer(dsdVectorLayer);
+
+            gndVectorLayer.setVisible(true);
+
+            map.getView().fit(gndVectorLayer.getSource().getExtent(), { padding: [10, 10, 10, 10], duration: 1000 });
+
+            // Remove the click event listener for the current vectorLayer
+            map.un('click', clickEventHandler);
+
+            // You can continue adding more levels or handle specific properties as needed
+            // Pass the new gndVectorLayer to the next level
+            handleGndMapClick(gndVectorLayer);
+          });
+        }
+      }
+
+      // Add the click event listener to the map
+      map.on('click', clickEventHandler);
+    }
+
+    // Function to handle click events and get feature properties for 'dsd'
+    function handleGndMapClick(gndVectorLayer) {
+      // Define the click event handler function
+      function clickEventHandler(event) {
+        var feature = map.forEachFeatureAtPixel(event.pixel, function (feature) {
+          return feature;
+        });
+
+        if (feature) {
+          var properties = feature.getProperties();
+          var gidValue = properties['gid'];
+
+          var apiUrl = 'http://192.168.10.14:8000/api/users/gnd/sql/select/?gid=' + encodeURIComponent(gidValue);
+
+          // Add a Vector layer with a GeoJSON source for the next level
+          addVectorLayer(apiUrl, function (selectedgndVectorLayer) {
+
+            // Set a custom style for the selected features
+            selectedgndVectorLayer.getSource().forEachFeature(function (feature) {
+              feature.setStyle(new ol.style.Style({
+                fill: new ol.style.Fill({
+                  color: 'rgba(255, 0, 219, 0.1)', // Red color with 50% opacity
+                }),
+                stroke: new ol.style.Stroke({
+                  color: '#ff00db', // Red color with 100% opacity
+                  width: 2,
+                }),
+              }));
+            });
+
+            gndVectorLayer.setVisible(false);
+
+            // Remove the current vectorLayer from the map
+            map.removeLayer(gndVectorLayer);
+
+            selectedgndVectorLayer.setVisible(true);
+
+            map.getView().fit(selectedgndVectorLayer.getSource().getExtent(), { padding: [10, 10, 10, 10], duration: 1000 });
+
+            // Remove the click event listener for the current vectorLayer
+            map.un('click', clickEventHandler);
+
+          });
+        }
+      }
+
+      // Add the click event listener to the map
+      map.on('click', clickEventHandler);
+    }
+
+
+
+
+
+  </script>
+</body>
+
+</html>
